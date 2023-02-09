@@ -5,5 +5,8 @@ defmodule MiscElixirScriptsTest do
   test "greets the world" do
 
     assert MiscElixirScripts.hello() == :world
+
+    assert Misc.First.fact(5) == 120
+
   end
 end
