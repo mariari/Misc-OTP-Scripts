@@ -6,7 +6,10 @@ defmodule MiscElixirScriptsTest do
 
     assert MiscElixirScripts.hello() == :world
 
-    assert Misc.First.fact(5) == 120
+  end
 
+  test "Factorial check" do
+    assert Misc.First.fact(5) == 120
+    assert Misc.First.fact(5) == Misc.First.fact_proper(5)
   end
 end

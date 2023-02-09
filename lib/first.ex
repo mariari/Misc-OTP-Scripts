@@ -33,4 +33,24 @@ defmodule Misc.First do
     acc
   end
 
+  @doc """
+  Computes the factorial of a number
+
+  ## Parameters
+
+  - n (number) - the number
+
+  ## Returns
+
+  the factorial of the input (n!)
+
+  ## Examples
+
+      iex> Misc.First.fact(5)
+      120
+  """
+  def fact_proper(n) do
+    1..n |> Enum.reduce(1, &*/2)
+  end
+
 end
