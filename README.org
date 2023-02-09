@@ -1,0 +1,39 @@
+* Misc OTP Scripts
+
+Welcome to my poor code in Elixir and Erlang. Currently this repo just
+contains Elixir code, and not much at that. Hopefully in time some
+interesting code will populate its contents
+
+** Installation
+
+If [[https://hex.pm/docs/publish][available in Hex]], the package can be installed
+by adding =misc_elixir_scripts= to your list of dependencies in =mix.exs=:
+
+#+begin_src elixir
+  def deps do
+    [
+      {:misc_elixir_scripts, "~> 0.1.0"}
+    ]
+  end
+#+end_src
+
+Documentation can be generated with [[https://github.com/elixir-lang/ex_doc][ExDoc]]
+and published on [[https://hexdocs.pm][HexDocs]]. Once published, the docs can
+be found at <https://hexdocs.pm/misc_elixir_scripts>.
+
+** Testing
+Sadly Elixir has rather poor tooling on this part.
+
+#+begin_src elixir
+  % MIX_ENV=test iex -S mix
+
+  iex(1)> Mix.Tasks.Test.run([])
+  iex(2)> r MiscElixirScriptsTest
+  iex(3)> Mix.Tasks.Test.run([])
+#+end_src
+
+- You will have to reload the tests after each run as mix caches it,
+  and you must run it from a testing environment or else it will
+  refuse to load the tests
+
+
