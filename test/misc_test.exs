@@ -1,11 +1,9 @@
-defmodule MiscElixirScriptsTest do
+defmodule MiscTest do
   use ExUnit.Case
-  doctest MiscElixirScripts
+  doctest Misc
 
   test "greets the world" do
-
-    assert MiscElixirScripts.hello() == :world
-
+    assert Misc.hello() == :world
   end
 
   test "Factorial check" do

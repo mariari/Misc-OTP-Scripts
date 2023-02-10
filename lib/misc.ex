@@ -1,4 +1,4 @@
-defmodule MiscElixirScripts do
+defmodule Misc do
   @moduledoc """
   Documentation for `MiscElixirScripts`.
   """

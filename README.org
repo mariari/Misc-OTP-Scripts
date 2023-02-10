@@ -7,12 +7,12 @@ interesting code will populate its contents
 ** Installation
 
 If [[https://hex.pm/docs/publish][available in Hex]], the package can be installed
-by adding =misc_elixir_scripts= to your list of dependencies in =mix.exs=:
+by adding =misc= to your list of dependencies in =mix.exs=:
 
 #+begin_src elixir
   def deps do
     [
-      {:misc_elixir_scripts, "~> 0.1.0"}
+      {:misc, "~> 0.1.0"}
     ]
   end
 #+end_src

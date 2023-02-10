@@ -1,9 +1,9 @@
-defmodule MiscElixirScripts.MixProject do
+defmodule Misc.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :misc_elixir_scripts,
+      app: :misc,
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,

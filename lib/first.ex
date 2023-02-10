@@ -4,7 +4,8 @@ defmodule Misc.First do
   """
 
   def hello do
-    MiscElixirScripts.hello()
+
+    Misc.hello()
   end
 
   @doc """
@@ -52,5 +53,4 @@ defmodule Misc.First do
   def fact_proper(n) do
     1..n |> Enum.reduce(1, &*/2)
   end
-
 end
