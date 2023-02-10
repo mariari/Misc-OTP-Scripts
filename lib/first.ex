@@ -4,30 +4,13 @@ defmodule Misc.First do
   """
 
   def hello do
-
     Misc.hello()
   end
 
-  @doc """
-  Computes the factorial of a number
-
-  ## Parameters
-
-  - n (number) - the number
-
-  ## Returns
-
-  the factorial of the input (n!)
-
-  ## Examples
-
-      iex> Misc.First.fact(5)
-      120
-  """
   def fact(n), do: fact(n, 1)
 
   def fact(n, acc) when n > 0 do
-    fact(n-1, acc * n)
+    fact(n - 1, acc * n)
   end
 
   def fact(n, acc) when n <= 0 do
@@ -55,7 +38,6 @@ defmodule Misc.First do
     1..n |> Enum.reduce(1, &*/2)
   end
 end
-
 
 defmodule Misc.Counter.Global do
   use Agent
@@ -104,15 +86,22 @@ defmodule Misc.Counter do
   end
 end
 
-# children = [
-#   Misc.Counter, # Same as {Misc.Counter, []}
-#   {Misc.Counter.Global, 0}
-# ]
+defmodule Misc.Living do
+  @moduledoc """
+  Ι notify the given pid when I spawn with the message :alive
+  """
+  def start_link(%{call: {mod, func, val}, pid: pid}) do
+    ret = apply(mod, func, val)
+    send(pid, :alive)
+    ret
+  end
 
-# Supervisor.start_link(children, strategy: :one_for_all)
+  def child_spec(%{mod: mod, initial_value: val, pid: pid}) do
+    %{start: func} = mod.child_spec(val)
+    %{id: __MODULE__, start: {__MODULE__, :start_link, [%{call: func, pid: pid}]}}
+  end
 
-# harder to supervise the Misc.Counter, as it's hard to get it's agent
-# id that's attached to it. Except when a name is given like in the
-# second children
-
-#if one crashes both get reset, due to the strategy
+  def child_spec(pod) do
+    start_link(Map.put(pod, :initial_value, []))
+  end
+end

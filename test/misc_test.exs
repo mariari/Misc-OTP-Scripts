@@ -1,11 +1,9 @@
 defmodule MiscTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest Misc
 
   test "greets the world" do
-
     assert Misc.hello() == :world
-
   end
 
   test "Factorial check" do
@@ -14,35 +12,39 @@ defmodule MiscTest do
   end
 
   test "Both Reset" do
-
     resume = Misc.Counter.Global.terminate()
 
     children = [
-      {Misc.Counter, [name: Misc.Counter]}, # :fooy also works
+      # :fooy also works
+      {Misc.Counter, [name: Misc.Counter]},
       # how should we handle this failing
-      {Misc.Counter.Global, 0}
+      {Misc.Living, %{mod: Misc.Counter.Global, initial_value: 0, pid: self()}}
+      # {Misc.Counter.Global, 0}
     ]
 
     {_, link} =
       try do
-        Supervisor.start_link(children, strategy: :one_for_all)
-
+        l = Supervisor.start_link(children, strategy: :one_for_all)
+        assert_receive :alive, 20_000
+        l
       catch
-        :exit, _ -> {:err, false}
-      # Counter already in a supervisor, can't do the tests
+        :exit, _ ->
+          # Counter already in a supervisor, can't do the tests
+          {:err, false}
       end
 
     if link do
-    Process.flag(:trap_exit, true)
       assert Misc.Counter.value(Misc.Counter) == 0
 
       Misc.Counter.increment(Misc.Counter)
 
       assert Misc.Counter.value(Misc.Counter) == 1
 
+      # lets crash the child! Terminate and crash are same but less noisy
+      terminate_child()
 
-      # lets crash the child!
-      crash_child()
+      # The process should be restarted, error if it doesn't
+      assert_receive :alive, 20_000
 
       assert Misc.Counter.value(Misc.Counter) == 0
 
@@ -53,30 +55,18 @@ defmodule MiscTest do
     # resume the original counter process
     case resume do
       {:ok, val} -> Misc.Counter.Global.start_link(val)
-      _          -> :ok
+      _ -> :ok
     end
-
   end
 
   def crash_child() do
     # with catch_exit the same behavior happens as if I don't print
-    try do
-      Misc.Counter.Global.increment_by("hi")
-    catch
-      :exit, e ->
-        IO.puts("have to have this here...")
-        3
-    end
+    Misc.Counter.Global.increment_by("hi")
+    |> catch_error
+    |> catch_exit
   end
 
   def terminate_child() do
-
-
-    # making sure we trap exits
-    Process.flag(:trap_exit, true)
-
     Misc.Counter.Global.terminate()
-
   end
-
 end

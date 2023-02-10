@@ -15,5 +15,4 @@ defmodule Misc do
   def hello do
     :world
   end
-
 end
