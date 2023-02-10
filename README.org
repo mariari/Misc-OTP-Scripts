@@ -28,7 +28,7 @@ Sadly Elixir has rather poor tooling on this part.
   % MIX_ENV=test iex -S mix
 
   iex(1)> Mix.Tasks.Test.run([])
-  iex(2)> r MiscElixirScriptsTest
+  iex(2)> r MiscTest
   iex(3)> Mix.Tasks.Test.run([])
 #+end_src
 

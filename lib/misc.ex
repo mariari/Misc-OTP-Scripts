@@ -8,7 +8,7 @@ defmodule Misc do
 
   ## Examples
 
-      iex> MiscElixirScripts.hello()
+      iex> Misc.hello()
       :world
 
   """
