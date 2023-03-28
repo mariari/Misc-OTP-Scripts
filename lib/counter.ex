@@ -44,3 +44,50 @@ defmodule Misc.Counter do
     Agent.update(agent, &(&1 + 1))
   end
 end
+
+
+# this is like the other two, but registers a dns name
+defmodule Misc.Counter.Registry do
+  @moduledoc """
+  We need to start a registry before we can use this
+
+  iex(1)> Registry.start_link(keys: :unique, name: :account_process_registry)
+  iex(14)> Misc.Counter.Registry.start_link(20)
+  {:ok, #PID<0.703.0>}
+  iex(15)> Misc.Counter.Registry.increment(5)
+  1
+  iex(16)> Misc.Counter.Registry.increment_by(5, 10)
+  11
+
+  """
+  use GenServer
+
+  def init(x), do: {:ok, x}
+
+  def start_link(id) do
+    GenServer.start_link(__MODULE__, 0, name: via(id))
+  end
+
+  defp via(account_id) do
+    {:via, Registry, {:account_process_registry, account_id}}
+  end
+
+  def increment_by(id, value) do
+    GenServer.call(via(id), {:increment, value})
+  end
+
+  def increment(id) do
+    GenServer.call(via(id), {:increment, 1})
+  end
+
+  def stop(id) do
+    GenServer.cast(via(id), :stop)
+  end
+
+  def handle_call({:increment, value}, _from, state) do
+    new_state = state + value
+    {:reply, new_state, new_state}
+  end
+
+  def handle_cast(:stop, dict), do: {:stop, :normal, dict}
+end

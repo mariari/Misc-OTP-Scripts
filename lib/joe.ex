@@ -256,3 +256,22 @@ defmodule Vshlr2 do
   end
 
 end
+
+# Exceptions - are when the runtime doesn't know what to do
+# Errors - happen when the programmer doesn't know what to do
+# lookup example is quite interesting
+
+# lookup replaced by
+# ---------------------
+# | Erlang | Elixir   |
+# ---------------------
+# | fetch  | fetch!   |
+# | is_key | has_key? |
+# | find   | fetch    |
+# ---------------------
+
+##################################################
+#                  Chapter 6                     #
+##################################################
+
+# kv, can be found in kv.ex

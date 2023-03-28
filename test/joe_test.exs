@@ -42,3 +42,10 @@ end
 
 # Exceptions - are when the runtime doesn't know what to do
 # Errors - happen when the programmer doesn't know what to do
+# lookup example is quite interesting
+
+# lookup replaced by
+# Erlang - Elixir
+# fetch  - fetch!
+# is_key - has_key?
+# search - fetch
