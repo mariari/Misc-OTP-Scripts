@@ -20,6 +20,8 @@ defmodule Misc.Narwhal.Validator do
 
   #############################################################
   #                         Types                             #
+  #                REFACTOR THESE TO DEFSTRUCT                #
+  #    https://elixir-lang.org/getting-started/structs.html   #
   #############################################################
 
   @type block_1 :: %{
@@ -33,7 +35,7 @@ defmodule Misc.Narwhal.Validator do
     pub_key: binary()
   }
 
-  # with signature
+  # with the block being signed
   @type signed_block_1 :: {block_structure_1(), binary()}
 
   @type cert_1 :: %{
@@ -42,6 +44,8 @@ defmodule Misc.Narwhal.Validator do
     validator: binary(),
     round: integer()
   }
+
+  @type signature :: %{signed: binary(), pub_key: binary()}
 
   @type partial_block_1 :: %{certs: list(), transactions: list()}
 
@@ -152,12 +156,12 @@ defmodule Misc.Narwhal.Primary do
 
   @spec init(init()) :: {:ok, :block_creation, state_1}
   def init({:block, config, block}),
-    do: {:ok, :block_creation, %{network: config, mode_data: block}}
+    do: {:ok, :block_creation, %{network: config, data: block}}
 
   def init(net),
     do: {:ok,
          :block_creation,
-         %{network: net, mode_data: Validator.new_partial_block()}}
+         %{network: net, data: Validator.new_partial_block()}}
 
   def start_link(arg) do
     :gen_statem.start_link(__MODULE__, arg, [])
@@ -196,7 +200,7 @@ defmodule Misc.Narwhal.Primary do
   end
 
   def block_creation({:call, from}, {:sign_block, block}, state) do
-    sign_block(from, block, state)
+    sign_external_block(from, block, state)
   end
 
   def block_creation({:call, from}, :get_state, state) do
@@ -204,7 +208,7 @@ defmodule Misc.Narwhal.Primary do
   end
 
   def signature_collection({:call, from}, {:sign_block, block}, state) do
-    sign_block(from, block, state)
+    sign_external_block(from, block, state)
   end
 
   def signature_collection({:call, from}, :get_state, state) do
@@ -218,10 +222,11 @@ defmodule Misc.Narwhal.Primary do
   #                        Helpers                            #
   #############################################################
 
-  @spec sign_block(pid, any(), state_1()) :: any()
-  defp sign_block(from, block = %{pub_key: pub_key}, state) do
-    %{network: net = %{signed_blocks_of_the_round: signed, blocks: blocks}, data: d} = state
-    case sign_if_valid(net, block) do
+  @spec sign_external_block(pid(), Validator.signed_block_1(), state_1()) :: {:keep_state, state_1(), any()}
+  defp sign_external_block(from, signed_block = {%{pub_key: pub_key, block: block}, _}, state) do
+    %{network: net = %{signed_blocks_of_the_round: signed, blocks: blocks},
+      data: d} = state
+    case sign_if_valid(net, signed_block) do
       :error ->
         {:keep_state, state, [{:reply, from, :error}]}
       signature ->
@@ -236,38 +241,46 @@ defmodule Misc.Narwhal.Primary do
     end
   end
 
-  @spec sign_if_valid(Validator.network(), Validator.signed_block_1()) :: :error | binary()
+
+  @spec sign_if_valid(Validator.network(), Validator.signed_block_1()) ::
+    :error | Validator.signature()
   defp sign_if_valid(
     %{signed_blocks_of_the_round: signed_blocks,
       round:                      round_validator,
-      private_key:                priv
+      private_key:                priv,
+      public_key:                 pub
     },
     {block = %{pub_key: validator_public_key, round: round_block}, signature}) do
 
     in_signed_set = signed_blocks |> MapSet.member?(validator_public_key)
 
-    valid_signature = valid_signature?(priv, block, signature)
+    valid_signature = valid_signature?(block, signature)
 
     same_round = round_validator == round_block
 
+    # TODO For real code add the following checks
+    # 1. number of blocks match what it should be
+    # 2. check if all the signed messages are valid
+    # 3. check if the keys all relate to actual validators
     if same_round && not in_signed_set && valid_signature && valid_block?(block) do
-      create_signature(block, priv)
+      %{signed: create_signature(block, priv), public_key: pub}
     else
       :error
     end
   end
 
-  def create_signature(block, priv_key) do
-    message = :erlang.term_to_binary(block)
+  @spec create_signature(Validator.block_structure_1(), binary()) :: binary()
+  def create_signature(%{block: b, round: r, pub_key: p}, priv_key) do
+    message = :erlang.term_to_binary({digest_block(b), r, p})
     :crypto.sign(:rsa, :ripemd160, message, priv_key)
   end
 
   @spec create_certificate(any(), Validator.block_1()) :: Validator.cert_1()
   def create_certificate(state, block) do
     %{hash: :crypto.hash(:blake2b, :erlang.term_to_binary(block)),
-      
+
     }
-    
+
   end
 
   # We don't do any computation in this test
@@ -276,14 +289,14 @@ defmodule Misc.Narwhal.Primary do
     true
   end
 
-  defp digest_block(%{block: b}) do
+  defp digest_block(b) do
     :crypto.hash(:blake2b, :erlang.term_to_binary(b))
   end
 
-  @spec valid_signature?(binary(), Validator.block_structure_1(), binary()) :: binary()
-  defp valid_signature?(priv,  %{block: b, round: r, pub_key: p}, signature) do
+  @spec valid_signature?(Validator.block_structure_1(), binary()) :: binary()
+  defp valid_signature?(%{block: b, round: r, pub_key: p}, signature) do
     message = :erlang.term_to_binary({digest_block(b), r, p})
-    :crypto.verify(:rsa, :ripemd160, message, signature, priv)
+    :crypto.verify(:rsa, :ripemd160, message, signature, p)
   end
 
   defp valid_block?(block) do
