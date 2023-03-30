@@ -1,5 +1,7 @@
 * Example calls
 
+** Signing a Block
+
 #+begin_src elixir
   import Misc.Narwhal.Validator
   import Misc.Narwhal.Primary
@@ -10,7 +12,7 @@
 
   {pub, priv} = :crypto.generate_key(:rsa, {1024,65537})
 
-  block = %{block: %{transactions: nil, certificates: nil}, round: 0, pub_key: pub}
+  block = %{block: %{transactions: [], certificates: []}, round: 0, pub_key: pub}
 
   signed = create_signature(block, priv)
 
@@ -19,3 +21,18 @@
   sign_block(p_pid, signed_block)
 #+end_src
 
+** Certifying a block
+#+begin_src elixir
+  import Misc.Narwhal.Validator
+  import Misc.Narwhal.Primary
+
+  {:ok, pid} = Misc.Narwhal.Validator.start_link(3)
+
+  p_pid = Misc.Narwhal.Validator.get_primary(pid)
+
+
+  new_certificate(p_pid, 5) # this will have to change when we actually validate
+  new_certificate(p_pid, 5) # this will have to change when we actually validate
+
+  new_certificate(p_pid, 5) # trigger mode change
+#+end_src

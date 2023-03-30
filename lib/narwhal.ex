@@ -60,7 +60,7 @@ defmodule Misc.Narwhal.Types do
   end
 
   def new_partial_block() do
-    %{certs: nil, transactions: nil}
+    %{certificates: [], transactions: []}
   end
 end
 
@@ -97,7 +97,7 @@ defmodule Misc.Narwhal.Validator do
   def init({:resuming, config, block}) do
     children =
       [ {Misc.Narwhal.Primary, {:block, config, block}},
-        {Misc.Narwhal.Communicator, nil}
+        {Misc.Narwhal.Communicator, []}
       ]
     Supervisor.init(children, strategy: :one_for_one)
   end
@@ -105,7 +105,7 @@ defmodule Misc.Narwhal.Validator do
   def init({:config, config}) do
     children =
       [ {Misc.Narwhal.Primary, config},
-        {Misc.Narwhal.Communicator, nil}
+        {Misc.Narwhal.Communicator, []}
       ]
     Supervisor.init(children, strategy: :one_for_one)
   end
@@ -113,7 +113,7 @@ defmodule Misc.Narwhal.Validator do
   def init(_) do
     children =
       [ {Misc.Narwhal.Primary, T.new_network(3)},
-        {Misc.Narwhal.Communicator, nil}
+        {Misc.Narwhal.Communicator, []}
       ]
     Supervisor.init(children, strategy: :one_for_one)
   end
@@ -161,6 +161,7 @@ defmodule Misc.Narwhal.Primary do
 
   @type init() :: T.network | {:block, T.network, T.partial_block_1()}
 
+  # TODO Use an AGENT to persist the last state before crash
   @spec init(init()) :: {:ok, :block_creation, state_1}
   def init({:block, config, block}),
     do: {:ok, :block_creation, %{network: config, data: block}}
@@ -195,16 +196,45 @@ defmodule Misc.Narwhal.Primary do
     :gen_statem.call(primary, :get_state)
   end
 
-
   #############################################################
   #                     Server States                         #
   #############################################################
 
-  def block_creation(:cast, :new_transaction, trans) do
+  def block_creation(:cast, {:new_transaction, transaction}, state) do
     # we should check for validity, but alas Ι don't
+    if valid_transaction?(transaction) do
+      {_, new_state} =
+        get_and_update_in(state, [:data, :transactions], &{nil, [transaction | &1]})
+      {:keep_state, new_state, []}
+    else
+      {:keep_state, state, []}
+    end
   end
 
-  def block_creation(:cast, :new_certificate, block) do
+  def block_creation({:call, from}, {:new_certificate, cert}, state) do
+      # the check is fake for now
+      # this call can happen in the nested if to save computation... who cares
+      net = state.network
+      path_to_cert = [:data, :certificates]
+      {num_certs, new_state} =
+        get_and_update_in(state, path_to_cert , &{length(&1) + 1, [cert | &1]})
+      cond do
+        not valid_certificate?(cert) ->
+          {:keep_state, state, [{:reply, from, :error}]}
+        num_certs < state.network.total_signatures_required ->
+          {:keep_state, new_state, [{:reply, from, :ack}]}
+        true ->
+          {block, sig} = create_block(new_state)
+          digest       = digest_block(block)
+          new_net      = Map.put(net, :blocks, Map.put(net.blocks, digest, block))
+          wip_cert     = %{signatures: [],
+                           validator:  new_net.public_key,
+                           digest:     digest,
+                           round:      new_net.round}
+          new_state    = %{network: new_net, data: wip_cert}
+          reply        = {:reply, from, {block, sig}}
+          {:next_state, :signature_collection, new_state, [reply]}
+      end
   end
 
   def block_creation({:call, from}, {:sign_block, block}, state) do
@@ -213,6 +243,10 @@ defmodule Misc.Narwhal.Primary do
 
   def block_creation({:call, from}, :get_state, state) do
     {:keep_state, state, [{:reply, from, state}]}
+  end
+
+  def block_creation(call, message, state) do
+    handle_unsupported(call, state, message, :signature_collection)
   end
 
   def signature_collection({:call, from}, {:sign_block, block}, state) do
@@ -224,32 +258,54 @@ defmodule Misc.Narwhal.Primary do
   end
 
   def signature_collection({:call, from}, :certification, trans) do
+
   end
+
+  def signature_collection(call, message, state) do
+    handle_unsupported(call, state, message, :signature_collection)
+  end
+
+
+  defp handle_unsupported({:call, from}, state, {message, _}, mode) do
+    message = "Unsupported message: #{message}, in state #{mode}"
+    {:keep_state, state, [{:reply, from, message}]}
+  end
+
+  defp handle_unsupported({:call, from}, state, _message, mode) do
+    message = "Unsupported message in state #{mode}"
+    {:keep_state, state, [{:reply, from, message}]}
+  end
+
+  defp handle_unsupported(:cast, _mode, _message, state) do
+    {:keep_state, state, []}
+  end
+
 
   #############################################################
   #                        Helpers                            #
+  #                  Signing and Hashing                      #
   #############################################################
 
-  @spec sign_external_block(pid(), T.signed_block_1(), state_1()) :: {:keep_state, state_1(), any()}
-  defp sign_external_block(from, signed_block = {%{pub_key: pub_key, block: block}, _}, state) do
-    %{network: net = %{signed_blocks_of_the_round: signed, blocks: blocks}, data: d} = state
+  @spec sign_external_block(pid(), T.signed_block_1(), state_1()) ::
+                           {:keep_state, state_1(), any()}
+  defp sign_external_block(from, signed_block, %{network: net, data: d}) do
+    {%{pub_key: pub_key, block: block}, _} = signed_block
     case sign_if_valid(net, signed_block) do
       :error ->
-        {:keep_state, state, [{:reply, from, :error}]}
+        {:keep_state, %{network: net, data: d}, [{:reply, from, :error}]}
       signature ->
-        block_storage = Map.put(blocks, digest_block(block), block)
-        currently_seen = MapSet.put(signed, pub_key)
+        block_storage = Map.put(net.blocks, digest_block(block), block)
+        currently_seen = MapSet.put(net.signed_blocks_of_the_round, pub_key)
         new_net =
           net
           |> Map.put(:blocks, block_storage)
           |> Map.put(:signed_blocks_of_the_round, currently_seen)
 
-        {:keep_state, %{data: d, network: new_net} , [{:reply, from, signature}]}
+        {:keep_state, %{data: d, network: new_net}, [{:reply, from, signature}]}
     end
   end
 
-
-  @spec sign_if_valid(T.network(), T.signed_block_1()) :: :error | T.signature()
+  @spec sign_if_valid(T.network(), T.signed_block_1()) :: T.signature() | :error
   defp sign_if_valid(
     %{signed_blocks_of_the_round: signed_blocks,
       round:                      round_validator,
@@ -275,28 +331,46 @@ defmodule Misc.Narwhal.Primary do
     end
   end
 
+  defp digest_block(b) do
+    :crypto.hash(:blake2b, :erlang.term_to_binary(b))
+  end
+
+  #############################################################
+  #                        Helpers                            #
+  #          Creation: Certs, Blocks, Signatures              #
+  #############################################################
+
   @spec create_signature(T.block_structure_1(), binary()) :: binary()
   def create_signature(%{block: b, round: r, pub_key: p}, priv_key) do
     message = :erlang.term_to_binary({digest_block(b), r, p})
     :crypto.sign(:rsa, :ripemd160, message, priv_key)
   end
 
+  @spec create_block(state_1()) :: T.signed_block_1()
+  def create_block(%{network: net, data: block}) do
+    block     = %{block: block, round: net.round, pub_key: net.public_key}
+    signature = create_signature(block, net.private_key)
+    {block, signature}
+  end
+
+
   @spec create_certificate(any(), T.block_1()) :: T.cert_1()
   def create_certificate(state, block) do
     %{hash: :crypto.hash(:blake2b, :erlang.term_to_binary(block)),
 
     }
-
   end
 
-  # We don't do any computation in this test
+
+  #############################################################
+  #                        Helpers                            #
+  #                    Validity Checks                        #
+  #############################################################
+
+  # We don't do any computation in this test, but we should
   defp valid_transaction?(transaction) do
     _ = transaction
     true
-  end
-
-  defp digest_block(b) do
-    :crypto.hash(:blake2b, :erlang.term_to_binary(b))
   end
 
   @spec valid_signature?(T.block_structure_1(), binary()) :: binary()
@@ -305,10 +379,27 @@ defmodule Misc.Narwhal.Primary do
     :crypto.verify(:rsa, :ripemd160, message, signature, p)
   end
 
+  defp valid_certificate?(cert) do
+    # we don't do any checking as we should. It is TRIVIAL to implement.
+    # Just call:
+    #
+    # Stream.all? valid_cert
+    # where valid_cert checks the certs are signing {digest, vlaidator, round}
+    #
+    # We don't do this for easier testing purposes, in reality DO THIS
+    _ = cert
+    true
+  end
+
   defp valid_block?(block) do
     _ = block
     true
   end
+
+  #############################################################
+  #                        Helpers                            #
+  #                         Misc                              #
+  #############################################################
 
   # gen_statem does not give this out. so we have to copy it in
   def child_spec(opts) do
