@@ -1,23 +1,9 @@
-defmodule Misc.Narwhal.Validator do
+defmodule Misc.Narwhal.Types do
   @moduledoc """
-  I am a validator for the Narwhal protocol.
 
-  We act as a supervisor, supervising a primary node that does the
-  logic, and a communication node, that communicates between other
-  validators.
-
-  ### Examples
-
-  {:ok, pid} = Misc.Narwhal.Validator.start_link(3)
-
-  Misc.Narwhal.Validator.get_primary(pid)
-
-  Misc.Narwhal.Primary.get_state(Misc.Narwhal.Validator.get_primary(pid))
-
+  I define out the types for the Narwhal protocol. I version out all
+  my types for easier upgrading down the line
   """
-
-  use Supervisor
-
   #############################################################
   #                         Types                             #
   #                REFACTOR THESE TO DEFSTRUCT                #
@@ -76,6 +62,28 @@ defmodule Misc.Narwhal.Validator do
   def new_partial_block() do
     %{certs: nil, transactions: nil}
   end
+end
+
+defmodule Misc.Narwhal.Validator do
+  @moduledoc """
+  I am a validator for the Narwhal protocol.
+
+  We act as a supervisor, supervising a primary node that does the
+  logic, and a communication node, that communicates between other
+  validators.
+
+  ### Examples
+
+  {:ok, pid} = Misc.Narwhal.Validator.start_link(3)
+
+  Misc.Narwhal.Validator.get_primary(pid)
+
+  Misc.Narwhal.Primary.get_state(Misc.Narwhal.Validator.get_primary(pid))
+
+  """
+
+  use Supervisor
+  alias Misc.Narwhal.Types, as: T
 
   #############################################################
   #                     Main Behavior                         #
@@ -104,7 +112,7 @@ defmodule Misc.Narwhal.Validator do
 
   def init(_) do
     children =
-      [ {Misc.Narwhal.Primary, new_network(3)},
+      [ {Misc.Narwhal.Primary, T.new_network(3)},
         {Misc.Narwhal.Communicator, nil}
       ]
     Supervisor.init(children, strategy: :one_for_one)
@@ -139,11 +147,11 @@ defmodule Misc.Narwhal.Primary do
   - signature_collection
   """
 
-  alias Misc.Narwhal.Validator, as: Validator
+  alias Misc.Narwhal.Types, as: T
 
   # Define out the records for the protocol
   @type state_1 :: %{
-    network: Validator.network(),
+    network: T.network(),
     data: any()
   }
 
@@ -151,8 +159,7 @@ defmodule Misc.Narwhal.Primary do
 
   def callback_mode, do: :state_functions
 
-  @type init() ::
-  Validator.network_1 | {:block, Validator.network_1, Validator.partial_block_1()}
+  @type init() :: T.network | {:block, T.network, T.partial_block_1()}
 
   @spec init(init()) :: {:ok, :block_creation, state_1}
   def init({:block, config, block}),
@@ -161,7 +168,7 @@ defmodule Misc.Narwhal.Primary do
   def init(net),
     do: {:ok,
          :block_creation,
-         %{network: net, data: Validator.new_partial_block()}}
+         %{network: net, data: T.new_partial_block()}}
 
   def start_link(arg) do
     :gen_statem.start_link(__MODULE__, arg, [])
@@ -179,7 +186,7 @@ defmodule Misc.Narwhal.Primary do
     :gen_statem.call(primary, {:new_certificate, certification})
   end
 
-  @spec sign_block(pid(), Validator.signed_block_1()) :: any()
+  @spec sign_block(pid(), T.signed_block_1()) :: any()
   def sign_block(primary, block) do
     :gen_statem.call(primary, {:sign_block, block})
   end
@@ -194,6 +201,7 @@ defmodule Misc.Narwhal.Primary do
   #############################################################
 
   def block_creation(:cast, :new_transaction, trans) do
+    # we should check for validity, but alas Ι don't
   end
 
   def block_creation(:cast, :new_certificate, block) do
@@ -222,10 +230,9 @@ defmodule Misc.Narwhal.Primary do
   #                        Helpers                            #
   #############################################################
 
-  @spec sign_external_block(pid(), Validator.signed_block_1(), state_1()) :: {:keep_state, state_1(), any()}
+  @spec sign_external_block(pid(), T.signed_block_1(), state_1()) :: {:keep_state, state_1(), any()}
   defp sign_external_block(from, signed_block = {%{pub_key: pub_key, block: block}, _}, state) do
-    %{network: net = %{signed_blocks_of_the_round: signed, blocks: blocks},
-      data: d} = state
+    %{network: net = %{signed_blocks_of_the_round: signed, blocks: blocks}, data: d} = state
     case sign_if_valid(net, signed_block) do
       :error ->
         {:keep_state, state, [{:reply, from, :error}]}
@@ -242,8 +249,7 @@ defmodule Misc.Narwhal.Primary do
   end
 
 
-  @spec sign_if_valid(Validator.network(), Validator.signed_block_1()) ::
-    :error | Validator.signature()
+  @spec sign_if_valid(T.network(), T.signed_block_1()) :: :error | T.signature()
   defp sign_if_valid(
     %{signed_blocks_of_the_round: signed_blocks,
       round:                      round_validator,
@@ -252,7 +258,7 @@ defmodule Misc.Narwhal.Primary do
     },
     {block = %{pub_key: validator_public_key, round: round_block}, signature}) do
 
-    in_signed_set = signed_blocks |> MapSet.member?(validator_public_key)
+    in_signed_set = MapSet.member?(signed_blocks, validator_public_key)
 
     valid_signature = valid_signature?(block, signature)
 
@@ -269,13 +275,13 @@ defmodule Misc.Narwhal.Primary do
     end
   end
 
-  @spec create_signature(Validator.block_structure_1(), binary()) :: binary()
+  @spec create_signature(T.block_structure_1(), binary()) :: binary()
   def create_signature(%{block: b, round: r, pub_key: p}, priv_key) do
     message = :erlang.term_to_binary({digest_block(b), r, p})
     :crypto.sign(:rsa, :ripemd160, message, priv_key)
   end
 
-  @spec create_certificate(any(), Validator.block_1()) :: Validator.cert_1()
+  @spec create_certificate(any(), T.block_1()) :: T.cert_1()
   def create_certificate(state, block) do
     %{hash: :crypto.hash(:blake2b, :erlang.term_to_binary(block)),
 
@@ -293,7 +299,7 @@ defmodule Misc.Narwhal.Primary do
     :crypto.hash(:blake2b, :erlang.term_to_binary(b))
   end
 
-  @spec valid_signature?(Validator.block_structure_1(), binary()) :: binary()
+  @spec valid_signature?(T.block_structure_1(), binary()) :: binary()
   defp valid_signature?(%{block: b, round: r, pub_key: p}, signature) do
     message = :erlang.term_to_binary({digest_block(b), r, p})
     :crypto.verify(:rsa, :ripemd160, message, signature, p)
@@ -304,7 +310,7 @@ defmodule Misc.Narwhal.Primary do
     true
   end
 
-
+  # gen_statem does not give this out. so we have to copy it in
   def child_spec(opts) do
     %{
       id: __MODULE__,
@@ -331,4 +337,3 @@ defmodule Misc.Narwhal.Communicator do
   def init(x), do: {:ok, x}
 
 end
-
