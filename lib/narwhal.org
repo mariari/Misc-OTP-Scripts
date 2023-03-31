@@ -1,3 +1,15 @@
+* Missing checks
+A few conditions are not checked that you would in a real system:
+
+1. Trusted Signatures  (use a trusted key infra, easy to make)
+2. Unique Signatures   (use a set instead of a map)
+3. Unique Certificates (use a set instead of a map)
+4. Certificate Validation
+5. Transaction validation
+6. Checks on Signature's to include:
+   1. The right number of certs
+   2. The signed certs are valid
+   3. They keys relate to a Trusted validator signatures
 * Example calls
 
 ** Signing a Block
@@ -35,4 +47,30 @@
   new_certificate(p_pid, 5) # this will have to change when we actually validate
 
   new_certificate(p_pid, 5) # trigger mode change
+#+end_src
+
+** Signing
+#+begin_src elixir
+  {:ok, pid} = Misc.Narwhal.Validator.start_link(3)
+
+  p_pid = Misc.Narwhal.Validator.get_primary(pid)
+
+  new_certificate(p_pid, 5)
+
+  new_certificate(p_pid, 5)
+
+  signed_block = new_certificate(p_pid, 5)
+
+  {:ok, pid_2} = Misc.Narwhal.Validator.start_link(3)
+
+  p_pid_2 = Misc.Narwhal.Validator.get_primary(pid_2)
+
+  signature = sign_block(p_pid_2, signed_block)
+
+  new_signature(p_pid, signature)
+
+  # in real code check for duplicates
+  new_signature(p_pid, signature)
+
+  new_signature(p_pid, signature)
 #+end_src
