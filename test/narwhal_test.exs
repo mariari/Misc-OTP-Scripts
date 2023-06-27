@@ -5,6 +5,8 @@ defmodule MiscTest.Narwhal do
   import Misc.Narwhal.Validator
   import Misc.Narwhal.Primary
 
+  alias Misc.Narwhal.Types, as: T
+
   doctest Misc
 
   test "Signing works on round 0" do
@@ -14,15 +16,13 @@ defmodule MiscTest.Narwhal do
 
     {pub, priv} = :crypto.generate_key(:rsa, {1024,65537})
 
-    block = %{block: %{transactions: [], certificates: []}, round: 0, pub_key: pub}
+    block = %T.BlockStructure_1{block: T.Block_1.new(), round: 0, pub_key: pub}
 
     _signed = create_signature(block, priv)
 
-    signed_block = {block, create_signature(block, priv)}
+    signed_block = %T.SignedBlock_1{struct: block, signature: create_signature(block, priv)}
 
     assert sign_block(p_pid, signed_block) != :error
-
-
   end
 
   test "State transition happens as we expect" do
@@ -36,7 +36,7 @@ defmodule MiscTest.Narwhal do
     assert new_certificate(p_pid, 5) == :ack
     assert new_certificate(p_pid, 5) == :ack
 
-    assert is_tuple(new_certificate(p_pid, 5)) # trigger mode change
+    assert is_map(new_certificate(p_pid, 5)) # trigger mode change
 
     assert is_bitstring (new_certificate(p_pid, 5)) # should not understand
 
