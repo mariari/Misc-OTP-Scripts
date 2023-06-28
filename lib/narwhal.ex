@@ -1,3 +1,9 @@
+# This is an implementation of the Narwhal spec.
+# The interesting modules can be found Misc.Narwhal.Validator down.
+# The modules above it are objects representing different types.
+# This structure is done in a more object oriented style to avoid
+# abstraction cutting.
+
 defmodule Misc.Narwhal.Block do
   use TypedStruct
 
@@ -228,8 +234,6 @@ defmodule Misc.Narwhal.Sign do
       :error
     end
   end
-
-
 end
 
 defmodule Misc.Narwhal.Validator do
