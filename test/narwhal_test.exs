@@ -2,7 +2,7 @@ defmodule MiscTest.Narwhal do
 
   use ExUnit.Case, async: true
 
-  import Misc.Narwhal.Validator
+  # import Misc.Narwhal.Validator
   import Misc.Narwhal.Primary
 
   alias Misc.Narwhal.Types, as: T
@@ -18,9 +18,9 @@ defmodule MiscTest.Narwhal do
 
     block = %T.BlockStructure_1{block: T.Block_1.new(), round: 0, pub_key: pub}
 
-    _signed = create_signature(block, priv)
+    _signed = T.BlockStructure_1.sign(block, priv)
 
-    signed_block = %T.SignedBlock_1{struct: block, signature: create_signature(block, priv)}
+    signed_block = %T.SignedBlock_1{struct: block, signature: T.BlockStructure_1.sign(block, priv)}
 
     assert sign_block(p_pid, signed_block) != :error
   end
