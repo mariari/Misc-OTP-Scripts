@@ -1,190 +1,189 @@
-defmodule Misc.Narwhal.Types do
+defmodule Misc.Narwhal.Block_1 do
+  use TypedStruct
+
+  alias __MODULE__
+
+  typedstruct do
+    field :transactions, list(),       default: []
+    field :certificates, list(Cert_1), default: []
+  end
+
+  @spec new :: t()
+  def new() do
+    %Block_1{}
+  end
+
+  def valid?(block) do
+    _ = block
+    true
+  end
+
+  def digest(block) do
+    :crypto.hash(:blake2b, :erlang.term_to_binary(block))
+  end
+end
+
+defmodule Misc.Narwhal.Signature do
   @moduledoc """
-
-  I define out the types for the Narwhal protocol. I version out all
-  my types for easier upgrading down the line
+  I contain the signature used in the narwhal protocol. I only
+  understand Signatures. If you want to sign things use the Signing
+  module instead.
   """
-  defmodule Block_1 do
-    use TypedStruct
+  use TypedStruct
 
-    typedstruct do
-      field :transactions, list(),       default: []
-      field :certificates, list(Cert_1), default: []
-    end
-
-    @spec new :: t()
-    def new() do
-      %Block_1{}
-    end
-
-    def valid?(block) do
-      _ = block
-      true
-    end
-
-    def digest(block) do
-      :crypto.hash(:blake2b, :erlang.term_to_binary(block))
-    end
+  typedstruct do
+    field :signature,  binary(), require: true
+    field :pub_key  , binary(),  require: true
   end
 
-  defmodule Signature do
-    @moduledoc """
-    I contain the signature used in the narwhal protocol. I only
-    understand Signatures. If you want to sign things use the Signing
-    module instead.
-    """
-    use TypedStruct
+  @spec verify(t(), binary()) :: boolean()
+  def verify(sig, message) do
+    :crypto.verify(:rsa, :ripemd160, message, sig.signature, sig.pub_key)
+  end
+end
 
-    typedstruct do
-      field :signature,  binary(), require: true
-      field :pub_key  , binary(),  require: true
-    end
+defmodule Misc.Narwhal.BlockStructure_1 do
+  use TypedStruct
 
-    @spec verify(t(), binary()) :: boolean()
-    def verify(sig, message) do
-      :crypto.verify(:rsa, :ripemd160, message, sig.signature, sig.pub_key)
-    end
+  alias __MODULE__
+
+  alias Misc.Narwhal.Block_1
+
+  typedstruct do
+    field :block,   Block_1.t(), require: true
+    field :round,   integer(),   default: 0
+    field :pub_key, binary(),    require: true
   end
 
-  defmodule BlockStructure_1 do
-    use TypedStruct
-
-    alias __MODULE__
-
-    typedstruct do
-      field :block,   Block_1.t(), require: true
-      field :round,   integer(),   default: 0
-      field :pub_key, binary(),    require: true
-    end
-
-    @spec to_binary(t()) :: binary()
-    def to_binary(bs) do
-      :erlang.term_to_binary({Block_1.digest(bs.block), bs.round, bs.pub_key})
-    end
-
-    @spec sign(t(), binary()) :: binary()
-    def sign(block_structure, priv_key) do
-      :crypto.sign(:rsa, :ripemd160, to_binary(block_structure), priv_key)
-    end
-
+  @spec to_binary(t()) :: binary()
+  def to_binary(bs) do
+    :erlang.term_to_binary({Block_1.digest(bs.block), bs.round, bs.pub_key})
   end
 
-  defmodule Cert_1 do
-    use TypedStruct
-
-    alias __MODULE__
-
-    typedstruct do
-      field :digest,     binary(),  require: true
-      # this should be a MapSet. To Avoid duplicates, for free
-      field :signatures, list(),    default: []
-      field :validator,  binary(),  require: true
-      field :round,      integer(), default: 0
-    end
-
-    @doc """
-    Checks if the certificate is valid
-    """
-    def valid?(cert) do
-      # we don't do any checking as we should. It is TRIVIAL to implement.
-      # Just call:
-      #
-      # Stream.all? valid_cert
-      # where valid_cert checks the certs are signing {digest, vlaidator, round}
-      #
-      # We don't do this for easier testing purposes, in reality DO THIS
-      _ = cert
-      true
-    end
-
-    @spec add_signature(t(), binary()) :: t()
-    def add_signature(cert, signature) do
-      %Cert_1{cert | signatures: [signature | cert.signatures]}
-    end
-
-    @spec number_of_signatures(t()) :: pos_integer()
-    def number_of_signatures(certificate) do
-      length(certificate.signatures)
-    end
-
+  @spec sign(t(), binary()) :: binary()
+  def sign(block_structure, priv_key) do
+    :crypto.sign(:rsa, :ripemd160, to_binary(block_structure), priv_key)
   end
 
-  defmodule SignedBlock_1 do
-    @moduledoc """
-    I represent a signed block, where the signature can either be
+end
 
-    1. A Signature.t(), which states that the given signature and
-       public key signed the BlockStructure_1.t()
+defmodule Misc.Narwhal.Cert_1 do
+  use TypedStruct
 
-    2. A raw signature (binary()), where the public key of the signed
-       block is stored within the BlockStructure_1.t() itself
-    """
-    use TypedStruct
+  alias __MODULE__
 
-    typedstruct do
-      field :struct, BlockStructure_1.t(), require: true
-      field :signature, binary() | Signature.t(), require: true
-    end
-
-    alias __MODULE__
-
-    @spec valid?(t()) :: boolean()
-    @doc """
-    I check if the given signature with the block_structure is valid
-
-    ### Parameters
-
-    - block_structure: this is block structure given to use
-    - signature: This can either be
-    1. A cryptographic signature.
-      + In this case, we are checking if the public key in the block
-    signed the message
-    2. A BlockStructure_1.t()
-      + In this case we are checking if the tuple signed the block
-    """
-    def valid?(signed = %SignedBlock_1{struct: bs}) do
-      message = BlockStructure_1.to_binary(bs)
-      case signed.signature do
-        sig=%Signature{} -> sig
-        signature        -> %Signature{signature: signature, pub_key: bs.pub_key}
-      end
-      |> Signature.verify(message)
-    end
-
-    def of_type?(%SignedBlock_1{}) do
-      true
-    end
-
-    def of_type?(_) do
-      false
-    end
-
+  typedstruct do
+    field :digest,     binary(),  require: true
+    # this should be a MapSet. To Avoid duplicates, for free
+    field :signatures, list(),    default: []
+    field :validator,  binary(),  require: true
+    field :round,      integer(), default: 0
   end
 
-  defmodule Network do
-    use TypedStruct
+  @doc """
+  Checks if the certificate is valid
+  """
+  def valid?(cert) do
+    # we don't do any checking as we should. It is TRIVIAL to implement.
+    # Just call:
+    #
+    # Stream.all? valid_cert
+    # where valid_cert checks the certs are signing {digest, vlaidator, round}
+    #
+    # We don't do this for easier testing purposes, in reality DO THIS
+    _ = cert
+    true
+  end
 
-    alias __MODULE__
+  @spec add_signature(t(), binary()) :: t()
+  def add_signature(cert, signature) do
+    %Cert_1{cert | signatures: [signature | cert.signatures]}
+  end
 
-    typedstruct do
-      # this is the value of 2f + 1 I guess
-      field :total_signatures_required, integer(), require: true
-      field :round, integer(), default: 0
-      # Map the hash of a block to the block itself.
-      field :blocks, map(), default: Map.new()
-      # we keep track of the signed nodes at this round
-      field :signed_blocks_of_the_round, MapSet.t(), default: MapSet.new()
-      field :public_key, binary(), require: true
-      field :private_key, binary(), require: true
+  @spec number_of_signatures(t()) :: pos_integer()
+  def number_of_signatures(certificate) do
+    length(certificate.signatures)
+  end
+
+end
+
+defmodule Misc.Narwhal.SignedBlock_1 do
+  @moduledoc """
+  I represent a signed block, where the signature can either be
+
+  1. A Signature.t(), which states that the given signature and
+  public key signed the BlockStructure_1.t()
+
+  2. A raw signature (binary()), where the public key of the signed
+  block is stored within the BlockStructure_1.t() itself
+  """
+  use TypedStruct
+
+  alias Misc.Narwhal.{BlockStructure_1, Signature, SignedBlock_1}
+
+  typedstruct do
+    field :struct, BlockStructure_1.t(), require: true
+    field :signature, binary() | Signature.t(), require: true
+  end
+
+  alias __MODULE__
+
+  @spec valid?(t()) :: boolean()
+  @doc """
+  I check if the given signature with the block_structure is valid
+
+  ### Parameters
+
+  - block_structure: this is block structure given to use
+  - signature: This can either be
+  1. A cryptographic signature.
+  + In this case, we are checking if the public key in the block
+  signed the message
+  2. A BlockStructure_1.t()
+  + In this case we are checking if the tuple signed the block
+  """
+  def valid?(signed = %SignedBlock_1{struct: bs}) do
+    message = BlockStructure_1.to_binary(bs)
+    case signed.signature do
+      sig=%Signature{} -> sig
+      signature        -> %Signature{signature: signature, pub_key: bs.pub_key}
     end
+    |> Signature.verify(message)
+  end
 
-    @spec new(integer()) :: t()
-    def new(signatures_needed) do
-      {pub, priv} = :crypto.generate_key(:rsa, {1024,65537})
-      %Network{public_key: pub,
-               private_key: priv,
-               total_signatures_required: signatures_needed }
-    end
+  def of_type?(%SignedBlock_1{}) do
+    true
+  end
+
+  def of_type?(_) do
+    false
+  end
+
+end
+
+defmodule Misc.Narwhal.Network do
+  use TypedStruct
+
+  alias __MODULE__
+
+  typedstruct do
+    # this is the value of 2f + 1 I guess
+    field :total_signatures_required, integer(), require: true
+    field :round, integer(), default: 0
+    # Map the hash of a block to the block itself.
+    field :blocks, map(), default: Map.new()
+    # we keep track of the signed nodes at this round
+    field :signed_blocks_of_the_round, MapSet.t(), default: MapSet.new()
+    field :public_key, binary(), require: true
+    field :private_key, binary(), require: true
+  end
+
+  @spec new(integer()) :: t()
+  def new(signatures_needed) do
+    {pub, priv} = :crypto.generate_key(:rsa, {1024,65537})
+    %Network{public_key: pub,
+             private_key: priv,
+             total_signatures_required: signatures_needed }
   end
 end
 
@@ -201,7 +200,7 @@ defmodule Misc.Narwhal.Sign do
   items in the narwhal protocol
   """
 
-  alias Misc.Narwhal.Types.{SignedBlock_1, Block_1, Signature, BlockStructure_1, Cert_1, Network}
+  alias Misc.Narwhal.{SignedBlock_1, Block_1, Signature, BlockStructure_1, Cert_1, Network}
 
   @spec if_valid(Network.t(), SignedBlock_1.t()) :: Signature.t() | :error
   def if_valid(
@@ -252,8 +251,7 @@ defmodule Misc.Narwhal.Validator do
   """
 
   use Supervisor
-  alias Misc.Narwhal.Types.{SignedBlock_1, Block_1, BlockStructure_1, Cert_1, Network}
-  alias Misc.Narwhal.Types, as: T
+  alias Misc.Narwhal.{SignedBlock_1, Block_1, BlockStructure_1, Cert_1, Network}
 
   #############################################################
   #                     Main Behavior                         #
@@ -316,9 +314,8 @@ defmodule Misc.Narwhal.Primary do
   - block_creation
   - signature_collection
   """
-  alias Misc.Narwhal.Types, as: T
   alias Misc.Narwhal.{Transaction, Sign}
-  alias Misc.Narwhal.Types.{SignedBlock_1, Block_1, BlockStructure_1, Cert_1, Network}
+  alias Misc.Narwhal.{SignedBlock_1, Block_1, BlockStructure_1, Cert_1, Network}
 
 
   # Define out the records for the protocol
@@ -453,7 +450,7 @@ defmodule Misc.Narwhal.Primary do
   end
 
   def signature_collection({:call, from}, {:sign_block, block}, state) do
-    if T.SignedBlock_1.of_type?(block) do
+    if SignedBlock_1.of_type?(block) do
       sign_external_block(from, block, state)
     else
       handle_unsupported({:call,from}, {:sign_block, block}, state, :signature_collection)

@@ -5,7 +5,7 @@ defmodule MiscTest.Narwhal do
   # import Misc.Narwhal.Validator
   import Misc.Narwhal.Primary
 
-  alias Misc.Narwhal.Types, as: T
+  alias Misc.Narwhal.{BlockStructure_1, Signature, SignedBlock_1, Block_1}
 
   doctest Misc
 
@@ -16,11 +16,11 @@ defmodule MiscTest.Narwhal do
 
     {pub, priv} = :crypto.generate_key(:rsa, {1024,65537})
 
-    block = %T.BlockStructure_1{block: T.Block_1.new(), round: 0, pub_key: pub}
+    block = %BlockStructure_1{block: Block_1.new(), round: 0, pub_key: pub}
 
-    _signed = T.BlockStructure_1.sign(block, priv)
+    _signed = BlockStructure_1.sign(block, priv)
 
-    signed_block = %T.SignedBlock_1{struct: block, signature: T.BlockStructure_1.sign(block, priv)}
+    signed_block = %SignedBlock_1{struct: block, signature: BlockStructure_1.sign(block, priv)}
 
     assert sign_block(p_pid, signed_block) != :error
   end
