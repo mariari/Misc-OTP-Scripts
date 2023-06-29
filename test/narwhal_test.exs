@@ -5,7 +5,7 @@ defmodule MiscTest.Narwhal do
   # import Misc.Narwhal.Validator
   import Misc.Narwhal.Primary
 
-  alias Misc.Narwhal.{BlockStructure, Signature, SignedBlock, Block}
+  alias Misc.Narwhal.{BlockStructure, Block, Cert}
 
   doctest Misc
 
@@ -20,7 +20,7 @@ defmodule MiscTest.Narwhal do
 
     _signed = BlockStructure.sign(block, priv)
 
-    signed_block = %SignedBlock{struct: block, signature: BlockStructure.sign(block, priv)}
+    signed_block = BlockStructure.sign_block(block, priv)
 
     assert sign_block(p_pid, signed_block) != :error
   end
@@ -68,7 +68,7 @@ defmodule MiscTest.Narwhal do
     transition = new_signature(p_pid, signature)
 
     # assert we have the required signatures
-    assert length(transition.signatures) == 3
+    assert Cert.number_of_signatures(transition) == 3
 
     # the round updates
     assert (get_state p_pid).network.round == 1
