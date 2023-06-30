@@ -1,5 +1,4 @@
 defmodule Misc.Counter.Registry do
-
   use GenServer
 
   def start_link(account_id) do
@@ -14,4 +13,9 @@ defmodule Misc.Counter.Registry do
   def order_placed(account_id) do
     GenServer.call(via_tuple(account_id), :order_placed)
   end  # genserver callbacks not shown for simplicityend
+
+  def init(init_arg) do
+    {:ok, init_arg}
+  end
+
 end
