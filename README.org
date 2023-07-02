@@ -22,7 +22,9 @@ and published on [[https://hexdocs.pm][HexDocs]]. Once published, the docs can
 be found at <https://hexdocs.pm/misc_elixir_scripts>.
 
 ** Testing
-Sadly Elixir has rather poor tooling on this part.
+Sadly Elixir has rather poor tooling on this part, this section helps
+covers better ways of calling the testing framework, namely from the
+REPL.
 
 #+begin_src elixir
   % MIX_ENV=test iex -S mix
@@ -37,3 +39,76 @@ Sadly Elixir has rather poor tooling on this part.
   refuse to load the tests
 
 
+To test a specific test you can do something like
+
+#+begin_src elixir
+  % MIX_ENV=test iex -S mix
+
+  iex(1)> ExUnit.start
+  iex(2)> ExUnit.configure(exclude: [:test], include: [line: 45]) # test all tests on line 45
+  iex(2)> Mix.Tasks.Test.run([])
+  iex(3)> r MiscTest.Narwhal
+  iex(4)> ExUnit.run # or Mix.Tasks.Test.run([])
+#+end_src
+
+Or something like this, which will be more precise
+
+#+begin_src elixir
+  % iex -S mix
+
+  iex(1)> ExUnit.start
+  iex(2)> c "test/narwhal_tests.exs" # only once
+  iex(3)> ExUnit.configure(exclude: [:test], include: [line: 45])
+  iex(4)> ExUnit.run
+  iex(5)> r MiscTest.Narwhal
+  iex(6)> ExUnit.run
+#+end_src
+
+Some other quick debugging notes, placing =dbg()= in a code before
+recompiling allows you to get into a context, so if so you'll want to
+tweak the config as follows.
+
+#+begin_src elixir
+  # the infinity timeout
+  ExUnit.configure(exclude: [:test], include: [line: 45], timeout: :infinity)
+#+end_src
+
+This gives you the ability to go inside the test at a certain point
+and =continue=, this is nice if you want to fast forward to a part of
+the test where you know it failed, sadly Erlang is not Smalltalk
+
+** Debug Tooling
+This is a bit janky due to LSP. I recommend using VS-Code for the
+debugger support, Emacs's debugging is a bit more janky sadly.
+
+To add debugging on a certain test you should add a new configruation,
+mine looks like
+
+#+begin_src js
+          {
+              "type": "mix_task",
+              "name": "mix test specific",
+              "request": "launch",
+              "task": "test",
+              "taskArgs": [
+                  "--trace"
+              ],
+              "startApps": true,
+              "projectDir": "${workspaceRoot}",
+              "requireFiles": [
+                  "test/**/test_helper.exs",
+                  "test/**/narwhal_test.exs:45"
+              ]
+          }
+#+end_src
+
++ This is all templated, only the required files are truly
+  unique. This looks similar for Emacs, just more janky thanks to LSP.
+
+The main benefits is that you get an IEX sessions inside wherever you
+want. This is a lot like `dbg()`, but you can chose the spots and step
+through it. Works fairly well.
+
+The main downside is that this is janky to call into as you have to
+setup a json file above, and you can't just run an arbitrary function,
+it must be a test because lol LSP.
