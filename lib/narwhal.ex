@@ -36,10 +36,12 @@ defmodule Misc.Narwhal.Signature do
   module instead.
   """
   use TypedStruct
+  @type private_key() :: [:crypto.key_id()]
+  @type public_key()  :: [:crypto.key_id()]
 
   typedstruct do
-    field :signature,  binary(), require: true
-    field :pub_key,    binary(), require: true
+    field :signature, binary(), require: true
+    field :pub_key, public_key(), require: true
   end
 
   @spec verify(t(), binary()) :: boolean()
@@ -66,10 +68,13 @@ defmodule Misc.Narwhal.BlockStructure do
 
   alias Misc.Narwhal.{Block, Signature}
 
+  @type private_key() :: [:crypto.key_id()]
+  @type public_key()  :: [:crypto.key_id()]
+
   typedstruct do
     field :block,   Block.t(), require: true
     field :round,   integer(), default: 0
-    field :pub_key, binary(),  require: true
+    field :pub_key, public_key(),  require: true
     field :signature, binary()
   end
 
@@ -82,12 +87,12 @@ defmodule Misc.Narwhal.BlockStructure do
     :erlang.term_to_binary({Block.digest(bs.block), bs.round, bs.pub_key})
   end
 
-  @spec sign(t(), binary()) :: binary()
+  @spec sign(t(), private_key()) :: binary()
   def sign(block_structure, priv_key) do
     :crypto.sign(:rsa, :ripemd160, to_binary(block_structure), priv_key)
   end
 
-  @spec sign_block(t(), binary()) :: t()
+  @spec sign_block(t(), private_key()) :: t()
   def sign_block(block_structure, priv_key) do
     %BlockStructure{block_structure | signature: sign(block_structure, priv_key)}
   end
@@ -131,8 +136,6 @@ defmodule Misc.Narwhal.BlockStructure do
   def of_type?(_) do
     false
   end
-
-
 end
 
 defmodule Misc.Narwhal.Cert do
@@ -180,6 +183,9 @@ defmodule Misc.Narwhal.Network do
 
   alias __MODULE__
 
+  @type private_key() :: [:crypto.key_id()]
+  @type public_key()  :: [:crypto.key_id()]
+
   typedstruct do
     # this is the value of 2f + 1 I guess
     field :total_signatures_required, integer(), require: true
@@ -188,8 +194,8 @@ defmodule Misc.Narwhal.Network do
     field :blocks, map(), default: Map.new()
     # we keep track of the signed nodes at this round
     field :signed_blocks_of_the_round, MapSet.t(), default: MapSet.new()
-    field :public_key, binary(), require: true
-    field :private_key, binary(), require: true
+    field :public_key,  public_key() , require: true
+    field :private_key, private_key(), require: true
   end
 
   @spec new(integer()) :: t()
@@ -413,9 +419,9 @@ defmodule Misc.Narwhal.Primary do
           digest    = Block.digest(signed_block.block)
           new_net   = Map.put(net, :blocks, Map.put(net.blocks, digest, signed_block))
           wip_cert  = %Cert{signatures: [],
-                              validator:  new_net.public_key,
-                              digest:     digest,
-                              round:      new_net.round}
+                            validator:  new_net.public_key,
+                            digest:     digest,
+                            round:      new_net.round}
           new_state = %{network: new_net, data: wip_cert}
           reply     = {:reply, from, signed_block}
           {:next_state, :signature_collection, new_state, [reply]}
@@ -423,7 +429,6 @@ defmodule Misc.Narwhal.Primary do
   end
 
   def block_creation({:call, from}, {:sign_block, block}, state) do
-
     if BlockStructure.of_type?(block) do
       sign_external_block(from, block, state)
     else
@@ -496,8 +501,7 @@ defmodule Misc.Narwhal.Primary do
   #                  Signing and Hashing                      #
   #############################################################
 
-  @spec sign_external_block(pid(), BlockStructure.t(), state_1()) ::
-                           {:keep_state, state_1(), any()}
+  @spec sign_external_block(pid(), BlockStructure.t(), state_1()) :: {:keep_state, state_1(), any()}
   defp sign_external_block(from, block_structure, %{network: net, data: d}) do
     case Sign.if_valid(net, block_structure) do
       :error ->
@@ -520,9 +524,9 @@ defmodule Misc.Narwhal.Primary do
   #          Creation: Certs, Blocks, Signatures              #
   #############################################################
 
-  @spec create_block(state_1()) :: SignedBlock.t()
+  @spec create_block(state_1()) :: BlockStructure.t()
   def create_block(%{network: net, data: block}) do
-    block     = %BlockStructure{block: block, round: net.round, pub_key: net.public_key}
+    block = %BlockStructure{block: block, round: net.round, pub_key: net.public_key}
     BlockStructure.sign_block(block, net.private_key)
   end
 
