@@ -44,11 +44,19 @@ To test a specific test you can do something like
 #+begin_src elixir
   % MIX_ENV=test iex -S mix
 
+  iex(1)> Mix.Tasks.Test.run([])
+  iex(2)> MiscTest.Vshlr."test Server 1 works as expected"(nil)
+#+end_src
+
+#+begin_src elixir
+  % MIX_ENV=test iex -S mix
+
   iex(1)> ExUnit.start
   iex(2)> ExUnit.configure(exclude: [:test], include: [line: 45]) # test all tests on line 45
   iex(2)> Mix.Tasks.Test.run([])
   iex(3)> r MiscTest.Narwhal
   iex(4)> ExUnit.run # or Mix.Tasks.Test.run([])
+  iex(2)> ExUnit.configure(exclude: [:test], include: [describe: "hello"]) # test all hello describe blocks
 #+end_src
 
 Or something like this, which will be more precise
