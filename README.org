@@ -21,6 +21,25 @@ Documentation can be generated with [[https://github.com/elixir-lang/ex_doc][ExD
 and published on [[https://hexdocs.pm][HexDocs]]. Once published, the docs can
 be found at <https://hexdocs.pm/misc_elixir_scripts>.
 
+** Connecting Erlang to the running system
+
+If we have IEX open like the following:
+
+#+begin_src bash
+  MIX_ENV=debug iex --sname otp-mariari --cookie otp-mariari -S mix
+#+end_src
+
+Then in another terminal we can Erlang connect to it with the
+following command:
+
+#+begin_src bash
+  erl -remsh otp-mariari -setcookie otp-mariari -sname erl-mariari
+#+end_src
+
+
+This is useful as this project is a mixture of erlang and elixir, and
+being able to run both interactively without having to swap syntax is
+nice.
 ** Testing
 Sadly Elixir has rather poor tooling on this part, this section helps
 covers better ways of calling the testing framework, namely from the
