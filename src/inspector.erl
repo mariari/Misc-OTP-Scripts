@@ -29,15 +29,16 @@ do_init(Object, Config) ->
     Panel    = wxPanel:new(Frame, []),
     Notebook = wxNotebook:new(Panel, 1, [{style, ?wxBK_DEFAULT}]),
 
+    RawView = raw:start_link(Notebook, self(), Object, Config),
+    wxNotebook:addPage(Notebook, RawView, "Raw"),
 
+
+    %% Imagine these views were real
     DummyPage = dummy_page(Notebook, "First Page"),
     wxNotebook:addPage(Notebook, DummyPage, "Dummy Page Lets go", []),
 
     DummyPage2 = dummy_page(Notebook, "Demo 2"),
     wxNotebook:addPage(Notebook, DummyPage2, "Dummy Page 2", []),
-
-    RawView = raw:start_link(Notebook, self(), Object, Config),
-    wxNotebook:addPage(Notebook, RawView, "First Time"),
 
     %% wxNotebook:connect(Notebook, command_notebook_page_changed,
     %%     	       [{skip, true}]), % {skip, true} has to be set on windows
