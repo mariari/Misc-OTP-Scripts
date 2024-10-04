@@ -2,7 +2,7 @@
 
 -behaviour(wx_object).
 
--export([start/1, init/1, start_link/4]).
+-export([start/1, init/1, start_link/4, handle_event/2]).
 
 -include_lib("wx/include/wx.hrl").
 
@@ -22,12 +22,8 @@ init(Initial) ->
 
 
 do_init({Notebook, Parent, Object, Config}) ->
-    _Page = dummy_page(Notebook, "First Version of Raw"),
     Page = tree(Notebook, Object),
     {Page, #state{field = 1}}.
-
-
-
 
 %% Tree version, lacks the ability to place objects, only text. Kind
 %% of a sad limitation.
@@ -40,11 +36,12 @@ do_init({Notebook, Parent, Object, Config}) ->
 %% Meaning we can maybe hack this to display an index/variable name
 %% then the Object's printer method in the same frame
 
+-spec tree(Parent, any()) -> wxPanel:wxPanel() when
+      Parent::wxWindow:wxWindow().
 tree(Notebook, Object) ->
     Panel    = wxPanel:new(Notebook, []),
     Columned = wxTreeCtrl:new(Panel, []),
-    RootName = lists:flatten(io_lib:format("Root: ~p",[Object])),
-    RootID   = wxTreeCtrl:addRoot(Columned, RootName),
+    RootID   = wxTreeCtrl:addRoot(Columned, "Root"),
 
     raw(Object, Columned, RootID),
 
@@ -52,8 +49,7 @@ tree(Notebook, Object) ->
 
     %% Setup sizers
     MainSizer = wxBoxSizer:new(?wxVERTICAL),
-    Sizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel,
-				 [{label, "wxTreeCtrl"}]),
+    Sizer = wxStaticBoxSizer:new(?wxVERTICAL, Panel, []),
 
 
     Options = [{flag, ?wxEXPAND}, {proportion, 1}],
@@ -61,26 +57,13 @@ tree(Notebook, Object) ->
     wxSizer:add(MainSizer, Sizer, Options),
     wxPanel:setSizer(Panel, MainSizer),
 
+    wxTreeCtrl:connect(Columned, command_tree_item_right_click),
+
     Panel.
-
-%% First Dummy page, fairly useless
-dummy_page(Notebook, Text) ->
-    Win1 = wxPanel:new(Notebook, []),
-    Win1Text = wxStaticText:new(Win1, ?wxID_ANY, Text),
-
-    Sizer1 = wxBoxSizer:new(?wxHORIZONTAL),
-    wxSizer:add(Sizer1, Win1Text),
-    wxPanel:setSizer(Win1, Sizer1),
-
-    wxStaticText:setForegroundColour(Win1Text, ?wxBLACK),
-    Win1.
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% raw item rendering
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
 
 -spec raw(Object, Tree, ID) -> ID when
       ID :: integer(),
@@ -121,3 +104,23 @@ raw_kv(PropertyList, Columned, RootID) ->
 
 basicToString(Object) ->
     lists:flatten(io_lib:format("~p",[Object])).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Behavior Handling
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% We should abstract the menu logic into a general inspector menu
+%% action
+
+handle_event(
+  #wx{event = #wxTree{type = command_tree_item_right_click, item = Item},
+      obj = TreeCtrl},
+  State = #state{}) ->
+    %% TODO :: Make a menu spawn that gives some options
+
+    RealItem = wxTreeCtrl:getItemData(TreeCtrl, Item),
+    io:format("~p ~n", [RealItem]),
+    %% Let us spawn our very own inspector on the piece of data
+    inspector:start_link(RealItem, []),
+    {noreply, State}.
